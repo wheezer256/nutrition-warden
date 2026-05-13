@@ -10,6 +10,11 @@ from bs4 import BeautifulSoup
 
 
 def scrape_url(url):
+    if "gemini.google.com" in url or "g.co/gemini" in url:
+        raise RuntimeError(
+            "Gemini share links require sign-in and cannot be scraped. "
+            "Ask the sender to paste the recipe text directly."
+        )
     if "tiktok.com" in url:
         return scrape_tiktok(url)
     return _scrape_generic(url)

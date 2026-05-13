@@ -17,6 +17,10 @@ fi
 PYTHON="$SKILL_DIR/venv/bin/python3"
 SCRIPT="$SKILL_DIR/scripts/daily_briefing.py"
 
+# Retry any queued bilingual sends before the briefing
+DB_CONN_STR="$DB_CONN_STR" LLM_API_URL="${LLM_API_URL:-}" \
+    "$PYTHON" "$SKILL_DIR/scripts/retry_bilingual.py" 2>/dev/null || true
+
 BRIEFING=$(DB_CONN_STR="$DB_CONN_STR" "$PYTHON" "$SCRIPT" 2>/dev/null)
 
 if [ -z "$BRIEFING" ]; then

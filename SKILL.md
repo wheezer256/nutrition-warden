@@ -8,6 +8,8 @@ metadata:
 
 # NutritionWarden
 
+> **CRITICAL — applies to every message:** Never use `web_fetch` on any URL. Never fetch, scrape, or read recipe content yourself. The pipeline scripts handle all of that internally. **Always use `exec` to run scripts.**
+
 ## Step 0 — Ignore automated messages
 
 If the message body matches any of these patterns, **do nothing — no reply, no action**:
@@ -39,7 +41,7 @@ Then check the sender's phone number and determine their tier (see table below).
 
 **IMPORTANT: Always use the `exec` tool to run the pipeline below. Never use `web_fetch` to fetch recipe URLs yourself — the pipeline handles scraping internally.**
 
-**If the message specifies meal type** (breakfast, lunch) — add `--meal-type TYPE`.  
+**If the message specifies meal type** (breakfast, lunch, side) — add `--meal-type TYPE`. Use `--meal-type side` for side dishes, accompaniments, or rice/salad/vegetable recipes that are served alongside a main.  
 **If a date is already mentioned** — convert to YYYY-MM-DD and run immediately.  
 **If no date** — reply with exactly:
 

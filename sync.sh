@@ -7,7 +7,7 @@ DEV_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Sync scripts and config to both locations
 for f in main.py process_meal.py daily_briefing.py suggest_meal.py \
-          accept_suggestion.py cancel_meal.py party.py scrape.py update_state.py; do
+          accept_suggestion.py cancel_meal.py party.py scrape.py update_state.py retry_bilingual.py; do
     cp "$DEV_DIR/scripts/$f" "$SKILL_DIR/scripts/$f"
     cp "$DEV_DIR/scripts/$f" "$WORKSPACE_SKILL_DIR/scripts/$f"
 done

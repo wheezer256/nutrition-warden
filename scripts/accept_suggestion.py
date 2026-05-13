@@ -101,7 +101,7 @@ def main():
     accept_p.add_argument("query", help="Suggestion ID or partial meal name")
     accept_p.add_argument("--cook-date", required=True, help="Date to cook (YYYY-MM-DD)")
     accept_p.add_argument("--meal-type", default="dinner",
-                          choices=["breakfast", "lunch", "dinner", "snack"])
+                          choices=["breakfast", "lunch", "dinner", "snack", "side"])
 
     reject_p = sub.add_parser("reject", help="Reject a suggestion")
     reject_p.add_argument("query", help="Suggestion ID or partial meal name")

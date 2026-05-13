@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 
 RULES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "rules.yaml")
 
-MEAL_TYPE_EMOJI = {"breakfast": "🍳", "lunch": "🥗", "dinner": "🍽️", "snack": "🍎"}
+MEAL_TYPE_EMOJI = {"breakfast": "🍳", "lunch": "🥗", "dinner": "🍽️", "snack": "🍎", "side": "🥦"}
 SINHALA_LANG = "si"
 
 
@@ -119,6 +119,7 @@ def init_db(conn_str):
         ("guest_count", "INTEGER"),
         ("servings", "INTEGER"),
         ("prep_date", "DATE"),
+        ("bilingual_sent", "BOOLEAN DEFAULT FALSE"),
     ]:
         cur.execute(f"ALTER TABLE meals ADD COLUMN IF NOT EXISTS {col} {defn}")
     cur.execute("""
@@ -216,15 +217,18 @@ def _run_gog(args, account):
     return result.stdout.strip()
 
 
-def sync_calendar(summary, date_str, calendar_id, description, account):
-    _run_gog([
+def sync_calendar(summary, date_str, calendar_id, description, account, attendees=None):
+    args = [
         "calendar", "create", calendar_id,
         "--summary", summary,
         "--from", date_str,
         "--to", date_str,
         "--all-day",
         "--description", description,
-    ], account)
+    ]
+    if attendees:
+        args += ["--attendees", ",".join(attendees), "--send-updates", "all"]
+    _run_gog(args, account)
 
 
 def sync_keep(meal_name, shopping_list, cook_date=None):
@@ -315,13 +319,19 @@ def main(meal_json_str):
     else:
         description = f"### Ingredients\n{ing_table}\n\n### Instructions\n{inst_table}"
 
+    attendees = [
+        u["email"] for u in rules.get("users", [])
+        if u.get("email") and u.get("email") != gog_account
+    ]
+
     conn = psycopg2.connect(conn_str)
     cur = conn.cursor()
     cur.execute(
         """INSERT INTO meals
            (date_added, cook_date, prep_date, meal_name, categories, is_high_protein, servings,
             meal_type, source, recipe_json)
-           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+           RETURNING id""",
         (
             datetime.now().date(),
             cook_date_str,
@@ -335,6 +345,7 @@ def main(meal_json_str):
             json.dumps(meal_data),
         ),
     )
+    new_meal_id = cur.fetchone()[0]
     conn.commit()
     cur.close()
     conn.close()
@@ -344,13 +355,13 @@ def main(meal_json_str):
     warnings = []
 
     try:
-        sync_calendar(calendar_summary, cook_date_str, calendar_id, description, gog_account)
+        sync_calendar(calendar_summary, cook_date_str, calendar_id, description, gog_account, attendees)
         if prep_date_str:
             sync_calendar(
                 f"🥣 Prep: {meal_data['name']}",
                 prep_date_str, calendar_id,
                 f"Prep day for {meal_data['name']} — cooking on {cook_date_str}.",
-                gog_account
+                gog_account, attendees
             )
     except Exception as e:
         warnings.append(f"Calendar sync failed: {e}")
@@ -364,7 +375,8 @@ def main(meal_json_str):
             warnings.append(f"Keep sync failed: {e}")
             sys.stderr.write(f"Warning: Keep sync failed: {e}\n")
 
-    # Send bilingual recipe to consumer users (e.g. Nilusha) for home-cooked meals only
+    # Send bilingual recipe to consumer users (e.g. Nilusha) for home-cooked meals only.
+    # bilingual_sent tracks success; retry_bilingual.py retries failures on next cron run.
     if source == "home_cooked" and llm_api_url and meal_data.get("ingredients"):
         bilingual_users = [u for u in rules.get("users", []) if u.get("receives_bilingual")]
         if bilingual_users:
@@ -372,9 +384,15 @@ def main(meal_json_str):
                 bilingual_msg = build_bilingual_recipe(meal_data, llm_api_url)
                 for user in bilingual_users:
                     send_whatsapp(user["phone"], bilingual_msg)
+                conn2 = psycopg2.connect(conn_str)
+                cur2 = conn2.cursor()
+                cur2.execute("UPDATE meals SET bilingual_sent = TRUE WHERE id = %s", (new_meal_id,))
+                conn2.commit()
+                cur2.close()
+                conn2.close()
             except Exception as e:
-                warnings.append(f"Bilingual send failed: {e}")
-                sys.stderr.write(f"Warning: Bilingual send failed: {e}\n")
+                warnings.append(f"Bilingual send queued for retry: {e}")
+                sys.stderr.write(f"Warning: Bilingual send failed, will retry: {e}\n")
 
     result = {
         "status": "success",

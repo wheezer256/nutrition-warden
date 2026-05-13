@@ -27,7 +27,7 @@ def main():
     parser = argparse.ArgumentParser(description="Cancel a planned meal")
     parser.add_argument("--cook-date", required=True, help="Date of the meal (YYYY-MM-DD or 'today')")
     parser.add_argument("--meal-type", default="dinner",
-                        choices=["breakfast", "lunch", "dinner", "snack"])
+                        choices=["breakfast", "lunch", "dinner", "snack", "side"])
     args = parser.parse_args()
 
     cook_date = date.today().isoformat() if args.cook_date == "today" else args.cook_date

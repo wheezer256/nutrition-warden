@@ -20,16 +20,19 @@ rules:
     # tier 1: full access (add/cancel meals, manage suggestions)
     - name: YourName
       phone: "+12345000001"
+      email: "you@gmail.com"
       tier: 1
       language: en
     # tier 1: second household member with full access
     - name: PartnerName
       phone: "+12345000002"
+      email: "partner@gmail.com"
       tier: 1
       language: en
     # tier 3: suggest-only (can propose meals, tier 1 approves)
     - name: KidName
       phone: "+12345000003"
+      email: "kid@gmail.com"
       tier: 3
       language: en
     # consumer: receives bilingual recipe cards, no planning access

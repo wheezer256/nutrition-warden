@@ -183,7 +183,7 @@ if __name__ == "__main__":
     parser.add_argument("input", nargs="?", help="Recipe URL, text, or delivery order description")
     parser.add_argument("--cook-date", help="Date to cook the meal (YYYY-MM-DD)")
     parser.add_argument("--meal-type", default="dinner",
-                        choices=["breakfast", "lunch", "dinner", "snack"],
+                        choices=["breakfast", "lunch", "dinner", "snack", "side"],
                         help="Meal type (default: dinner)")
     parser.add_argument("--source", default="home_cooked",
                         choices=["home_cooked", "delivery"],
