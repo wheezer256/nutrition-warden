@@ -1,0 +1,87 @@
+rules:
+  rolling_window_days: 7
+
+  limits:
+    - category: Fried
+      max_per_window: 1
+    - category: Pasta
+      max_per_window: 1
+
+  targets:
+    - attribute: is_high_protein
+      min_per_window: 5
+
+  persistent_notes:
+    # Add per-ingredient cooking notes here — appended to instructions automatically
+    - ingredient: Chicken Breast
+      note: "Internal temp should reach 74°C."
+
+  users:
+    # tier 1: full access (add/cancel meals, manage suggestions)
+    - name: YourName
+      phone: "+12345000001"
+      tier: 1
+      language: en
+    # tier 1: second household member with full access
+    - name: PartnerName
+      phone: "+12345000002"
+      tier: 1
+      language: en
+    # tier 3: suggest-only (can propose meals, tier 1 approves)
+    - name: KidName
+      phone: "+12345000003"
+      tier: 3
+      language: en
+    # consumer: receives bilingual recipe cards, no planning access
+    - name: StaffName
+      phone: "+12345000004"
+      tier: consumer
+      language: en
+      receives_bilingual: false
+
+  freshness:
+    bulk:
+      buy_days_ahead: 14
+      examples: ["rice", "pasta", "canned goods", "olive oil", "spices", "onions", "garlic"]
+    standard:
+      buy_days_ahead: 5
+      examples: ["eggs", "cheese", "butter", "yogurt", "lemons"]
+    fresh:
+      buy_days_ahead: 2
+      examples: ["fish", "chicken", "beef", "lamb", "leafy greens", "herbs", "avocado", "tomatoes"]
+    day_of:
+      buy_days_ahead: 0
+      examples: ["fresh bread", "sushi-grade fish", "live seafood"]
+
+  dietary:
+    active_mode: high_protein
+    concerns: []
+    modes:
+      high_protein:
+        description: ">=30g protein per serving minimum"
+        enforce_target: true
+      liver_health:
+        description: "Low saturated fat, no alcohol, limited processed food"
+        avoid_categories: ["Fried"]
+        max_red_meat_per_week: 1
+      balanced:
+        description: "Standard healthy balanced diet"
+        enforce_target: false
+
+  nutritional_targets:
+    - group: Omega-3
+      match_categories: [Seafood, Fish, Salmon, Tuna, Mackerel, Sardines]
+      min_per_week: 2
+      suggestion: "Add salmon, mackerel, or sardines this week"
+    - group: Leafy Greens
+      match_categories: [Salad, Vegetarian, Greens, Spinach]
+      min_per_week: 3
+      suggestion: "Add a side salad or spinach dish"
+    - group: Fibre
+      match_categories: [Vegetarian, Soup, Salad, Legumes, Beans, Lentils]
+      min_per_week: 3
+      suggestion: "Consider lentils, beans, or a vegetable-heavy dish"
+    - group: Red Meat
+      match_categories: [Beef, Lamb, Pork, Red Meat]
+      max_per_week: 3
+      suggestion: "Good red meat intake — consider fish or poultry next"

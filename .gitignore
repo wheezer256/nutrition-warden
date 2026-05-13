@@ -1,0 +1,7 @@
+venv/
+.env.local
+config/rules.yaml
+meal_plan_state.md
+__pycache__/
+*.pyc
+*.pyo
