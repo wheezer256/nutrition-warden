@@ -1,7 +1,6 @@
 import os
 import sys
 import json
-import shutil
 import subprocess
 import yaml
 import psycopg2
@@ -11,7 +10,6 @@ from datetime import datetime, timedelta
 RULES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "config", "rules.yaml")
 
 MEAL_TYPE_EMOJI = {"breakfast": "🍳", "lunch": "🥗", "dinner": "🍽️", "snack": "🍎", "side": "🥦"}
-SINHALA_LANG = "si"
 
 
 def _require_env(name):
@@ -19,70 +17,6 @@ def _require_env(name):
     if not val:
         raise RuntimeError(f"Required environment variable '{name}' is not set.")
     return val
-
-
-def call_llm(prompt, llm_api_url):
-    headers = {"Content-Type": "application/json"}
-    groq_key = os.environ.get("GROQ_API_KEY")
-    if groq_key:
-        headers["Authorization"] = f"Bearer {groq_key}"
-    model = os.environ.get("LLM_MODEL") or ("meta-llama/llama-4-scout-17b-16e-instruct" if "groq.com" in llm_api_url else "ggml-org/Qwen3-Omni-30B-A3B-Instruct-GGUF")
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.2,
-    }
-    response = requests.post(llm_api_url, headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"].strip()
-
-
-def _openclaw_argv():
-    node = os.environ.get("OPENCLAW_NODE") or shutil.which("node")
-    js = os.environ.get("OPENCLAW_JS")
-    if node and js:
-        return [node, js]
-    openclaw = shutil.which("openclaw")
-    if openclaw:
-        return [openclaw]
-    raise RuntimeError("openclaw not found. Set OPENCLAW_NODE+OPENCLAW_JS or ensure openclaw is in PATH.")
-
-
-def send_whatsapp(phone, message):
-    subprocess.run(
-        _openclaw_argv() + ["message", "send",
-         "--channel", "whatsapp",
-         "--target", phone,
-         "--message", message],
-        capture_output=True, text=True, timeout=30
-    )
-
-
-def build_bilingual_recipe(meal_data, llm_api_url):
-    """Translate recipe to Sinhala and return English + Sinhala formatted message."""
-    name = meal_data["name"]
-    ingredients = "\n".join(f"- {i['item']}: {i['amount']}" for i in meal_data.get("ingredients", []))
-    instructions = "\n".join(f"{n}. {s}" for n, s in enumerate(meal_data.get("instructions", []), 1))
-    english_text = f"*{name}*\n\n*Ingredients:*\n{ingredients}\n\n*Instructions:*\n{instructions}"
-
-    prompt = f"""Translate the following recipe into Sinhala (සිංහල).
-Keep the meal name, ingredient amounts/units in English.
-Only translate the ingredient names, instructions, and section labels.
-
-Recipe:
-{english_text}
-
-Output ONLY the Sinhala translation, no preamble."""
-    sinhala_text = call_llm(prompt, llm_api_url)
-
-    return (
-        f"🍽️ *{name}*\n\n"
-        f"━━━ 🇬🇧 English ━━━\n\n"
-        f"*Ingredients:*\n{ingredients}\n\n"
-        f"*Instructions:*\n{instructions}\n\n"
-        f"━━━ 🇱🇰 සිංහල ━━━\n\n"
-        f"{sinhala_text}"
-    )
 
 
 def init_db(conn_str):
@@ -119,7 +53,6 @@ def init_db(conn_str):
         ("guest_count", "INTEGER"),
         ("servings", "INTEGER"),
         ("prep_date", "DATE"),
-        ("bilingual_sent", "BOOLEAN DEFAULT FALSE"),
     ]:
         cur.execute(f"ALTER TABLE meals ADD COLUMN IF NOT EXISTS {col} {defn}")
     cur.execute("""
@@ -271,7 +204,6 @@ def main(meal_json_str):
     ha_token = _require_env("HA_TOKEN")
     calendar_id = _require_env("GOOGLE_CALENDAR_ID")
     gog_account = _require_env("GOG_ACCOUNT")
-    llm_api_url = os.environ.get("LLM_API_URL", "")
 
     with open(RULES_PATH, "r") as f:
         rules = yaml.safe_load(f)["rules"]
@@ -331,7 +263,7 @@ def main(meal_json_str):
            (date_added, cook_date, prep_date, meal_name, categories, is_high_protein, servings,
             meal_type, source, recipe_json)
            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-           RETURNING id""",
+           """,
         (
             datetime.now().date(),
             cook_date_str,
@@ -345,7 +277,6 @@ def main(meal_json_str):
             json.dumps(meal_data),
         ),
     )
-    new_meal_id = cur.fetchone()[0]
     conn.commit()
     cur.close()
     conn.close()
@@ -375,24 +306,10 @@ def main(meal_json_str):
             warnings.append(f"Keep sync failed: {e}")
             sys.stderr.write(f"Warning: Keep sync failed: {e}\n")
 
-    # Send bilingual recipe to consumer users (e.g. Nilusha) for home-cooked meals only.
-    # bilingual_sent tracks success; retry_bilingual.py retries failures on next cron run.
-    if source == "home_cooked" and llm_api_url and meal_data.get("ingredients"):
-        bilingual_users = [u for u in rules.get("users", []) if u.get("receives_bilingual")]
-        if bilingual_users:
-            try:
-                bilingual_msg = build_bilingual_recipe(meal_data, llm_api_url)
-                for user in bilingual_users:
-                    send_whatsapp(user["phone"], bilingual_msg)
-                conn2 = psycopg2.connect(conn_str)
-                cur2 = conn2.cursor()
-                cur2.execute("UPDATE meals SET bilingual_sent = TRUE WHERE id = %s", (new_meal_id,))
-                conn2.commit()
-                cur2.close()
-                conn2.close()
-            except Exception as e:
-                warnings.append(f"Bilingual send queued for retry: {e}")
-                sys.stderr.write(f"Warning: Bilingual send failed, will retry: {e}\n")
+    bilingual_recipients = [
+        {"name": u["name"], "phone": u["phone"]}
+        for u in rules.get("users", []) if u.get("receives_bilingual")
+    ] if source == "home_cooked" and meal_data.get("ingredients") else []
 
     result = {
         "status": "success",
@@ -401,6 +318,12 @@ def main(meal_json_str):
         "meal_type": meal_type,
         "source": source,
         "shopping_items": meal_data.get("shopping_list", []) if source == "home_cooked" else [],
+        "bilingual_recipients": bilingual_recipients,
+        "recipe": {
+            "name": meal_data["name"],
+            "ingredients": meal_data.get("ingredients", []),
+            "instructions": meal_data.get("instructions", []),
+        } if bilingual_recipients else None,
     }
     if warnings:
         result["warnings"] = warnings

@@ -176,7 +176,25 @@ If she sends any message, reply:
 
 ## Reply based on stdout (tier 1 flows)
 
-- `SUCCESS:` → Confirm the meal was logged, the scheduled date, and meal type if not dinner.
+- `SUCCESS:` → Confirm the meal was logged, the scheduled date, and meal type if not dinner. Then check for `bilingual_recipients` in the result — if non-empty, translate the recipe to the recipient's language and send it. For Sinhala (`si`): produce an English + Sinhala bilingual card in this exact format, then send via `openclaw message send --channel whatsapp --target PHONE --message '...'` to each recipient:
+
+  ```
+  🍽️ *[meal name]*
+
+  ━━━ 🇬🇧 English ━━━
+
+  *Ingredients:*
+  - [item]: [amount]
+  ...
+
+  *Instructions:*
+  1. [step]
+  ...
+
+  ━━━ 🇱🇰 සිංහල ━━━
+
+  [full Sinhala translation — translate ingredient names, instructions, and section labels; keep meal name and amounts/units in English]
+  ```
 - `REJECTED:` → Report the violation reasons, then suggest a high-protein compliant alternative.
 - JSON with `"status": "prep_conflict"` → The recipe needs advance prep. Reply with:
   > *[meal_name]* needs [prep_days_before] day(s) of prep — earliest I can schedule it is **[earliest_date]**. Want to plan it for then?
